@@ -105,7 +105,8 @@ class Weather(Frame):
     def get_weather(self):
         try:
             # get location
-            location_req_url = "http://freegeoip.net/json/%s" % self.get_ip()
+            #location_req_url = "http://freegeoip.net/json/%s" % self.get_ip() # freegeoip.net connection errors
+            location_req_url = "https://labs.turbo.run/api/v1/misc/geo?host=%s" % self.get_ip() # backup server working
             r = requests.get(location_req_url)
             location_obj = json.loads(r.text)
 
