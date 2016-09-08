@@ -257,7 +257,7 @@ class CalendarEvent(Frame):
     def __init__(self, parent, event_name="Event 1", start_time='start', end_time='end'):
         Frame.__init__(self, parent, bg='black')
 
-        image = Image.open("assets/Calendar.png")
+        image = Image.open("assets/Calendar.png") # Calendar based on icon made by Freepik from www.flaticon.com 
         image = image.resize((25, 25), Image.ANTIALIAS)
         image = image.convert('RGB')
         photo = ImageTk.PhotoImage(image)
