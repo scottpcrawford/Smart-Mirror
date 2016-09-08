@@ -1,8 +1,7 @@
 # smartmirror.py
 # requirements
 # requests, feedparser, traceback, Pillow
-
-from Tkinter import *
+from tkinter import *
 import time
 import requests
 import json
@@ -10,9 +9,12 @@ import traceback
 import feedparser
 from PIL import Image, ImageTk
 
+import events_from_cal
+from api_keys import forecastio_api_key
+
 ip = '<IP>'
 country_code = 'us'
-weather_api_token = '<TOKEN>'
+weather_api_token = forecastio_api_key
 
 
 # maps open weather icons to
@@ -91,24 +93,35 @@ class Weather(Frame):
         self.locationLbl = Label(self, font=('Helvetica', 18), fg="white", bg="black")
         self.locationLbl.pack(side=TOP, anchor=W)
         self.get_weather()
+        
+    def get_ip(self):
+        try:
+            ip_url = "http://jsonip.com/"
+            req = requests.get(ip_url)
+            ip_json = json.loads(req.text)
+            return ip_json['ip']
+        except Exception as e:
+            traceback.print_exc()
+            return "Error: %s. Cannot get ip." % e
 
     def get_weather(self):
         try:
             # get location
-            location_req_url = "http://freegeoip.net/json/%s" % ip
+            #location_req_url = "http://freegeoip.net/json/%s" % self.get_ip() 
+            #location_req_url = "https://labs.turbo.run/api/v1/misc/geo?host=%s" % self.get_ip()
+            location_req_url = 'http://freegeoip.io/json/%s' % self.get_ip()
             r = requests.get(location_req_url)
             location_obj = json.loads(r.text)
-
+            
             lat = location_obj['latitude']
             lon = location_obj['longitude']
 
             location2 = "%s, %s" % (location_obj['city'], location_obj['region_code'])
-
+            
             # get weather
             weather_req_url = "https://api.forecast.io/forecast/%s/%s,%s" % (weather_api_token, lat,lon)
             r = requests.get(weather_req_url)
             weather_obj = json.loads(r.text)
-
             degree_sign= u'\N{DEGREE SIGN}'
             temperature2 = "%s%s" % (str(int(weather_obj['currently']['temperature'])), degree_sign)
             currently2 = weather_obj['currently']['summary']
@@ -148,7 +161,7 @@ class Weather(Frame):
                 self.locationLbl.config(text=location2)
         except Exception as e:
             traceback.print_exc()
-            print "Error: %s. Cannot get weather." % e
+            print ("Error: %s. Cannot get weather".format(e))
 
         self.after(600000, self.get_weather)
 
@@ -173,8 +186,11 @@ class News(Frame):
             # remove all children
             for widget in self.headlinesContainer.winfo_children():
                 widget.destroy()
-
-            headlines_url = "https://news.google.com/news?ned=%s&output=rss" % country_code
+            if country_code == None:
+                headlines_url = "https://news.google.com/news?ned=us&output=rss"
+            else:
+                headlines_url = "https://news.google.com/news?ned=%s&output=rss" % country_code
+                
             feed = feedparser.parse(headlines_url)
 
             for post in feed.entries[0:5]:
@@ -182,7 +198,7 @@ class News(Frame):
                 headline.pack(side=TOP, anchor=W)
         except Exception as e:
             traceback.print_exc()
-            print "Error: %s. Cannot get news." % e
+            print ('Error: %s. Cannot get news.').format(e)
 
         self.after(600000, self.get_headlines)
 
@@ -208,32 +224,56 @@ class NewsHeadline(Frame):
 class Calendar(Frame):
     def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent, bg='black')
-        self.title = 'Calendar Events'
+        self.title = 'Events'
         self.calendarLbl = Label(self, text=self.title, font=('Helvetica', 28), fg="white", bg="black")
-        self.calendarLbl.pack(side=TOP, anchor=E)
+        self.calendarLbl.pack(side=TOP, anchor=W)
         self.calendarEventContainer = Frame(self, bg='black')
-        self.calendarEventContainer.pack(side=TOP, anchor=E)
+        self.calendarEventContainer.pack(side=TOP, anchor=W)
         self.get_events()
 
     def get_events(self):
-        #TODO: implement this method
-        # reference https://developers.google.com/google-apps/calendar/quickstart/python
-
         # remove all children
         for widget in self.calendarEventContainer.winfo_children():
             widget.destroy()
 
-        calendar_event = CalendarEvent(self.calendarEventContainer)
-        calendar_event.pack(side=TOP, anchor=E)
-        pass
+        events = events_from_cal.get_events()
+        print(events[0]['start'])
+        for event in events[0:6]:
+            if event['start'].get('dateTime'):
+                start = event['start'].get('dateTime', event['start'].get('date'))[11:16] # grab only hours/minutes from string
+                end = event['end'].get('dateTime', event['end'].get('date'))[11:16] # grab only hours/minutes from string
+                calendar_event = CalendarEvent(self.calendarEventContainer, event["summary"], start, end) 
+                calendar_event.pack(side=TOP, anchor=W)
+            else:
+                start = 'All Day'
+                end = 'All Day'
+                calendar_event = CalendarEvent(self.calendarEventContainer, event["summary"], start, end) 
+                calendar_event.pack(side=TOP, anchor=W)
+            
+
 
 
 class CalendarEvent(Frame):
-    def __init__(self, parent, event_name="Event 1"):
+    def __init__(self, parent, event_name="Event 1", start_time='start', end_time='end'):
         Frame.__init__(self, parent, bg='black')
+
+        image = Image.open("assets/Calendar.png")
+        image = image.resize((25, 25), Image.ANTIALIAS)
+        image = image.convert('RGB')
+        photo = ImageTk.PhotoImage(image)
+        self.iconLbl = Label(self, bg='black', image=photo)
+        self.iconLbl.image = photo
+        self.iconLbl.pack(side=LEFT, anchor=W)
+
         self.eventName = event_name
-        self.eventNameLbl = Label(self, text=self.eventName, font=('Helvetica', 18), fg="white", bg="black")
-        self.eventNameLbl.pack(side=TOP, anchor=E)
+        self.startTime = start_time
+        self.endTime = end_time
+        self.eventNameLbl = Label(self, text=self.eventName+' - ', font=('Helvetica', 18), fg="white", bg="black")
+        self.eventNameLbl.pack(side=LEFT, anchor=W)
+        self.startTimeLbl = Label(self, text=self.startTime, font=('Helvetica', 18), fg="white", bg="black")
+        self.startTimeLbl.pack(side=LEFT, anchor=E)
+
+
 
 
 class FullscreenWindow:
@@ -256,10 +296,10 @@ class FullscreenWindow:
         self.weather.pack(side=LEFT, anchor=N, padx=100, pady=60)
         # news
         self.news = News(self.bottomFrame)
-        self.news.pack(side=LEFT, anchor=S, padx=100, pady=60)
-        # calender - removing for now
-        # self.calender = Calendar(self.bottomFrame)
-        # self.calender.pack(side = RIGHT, anchor=S, padx=100, pady=60)
+        self.news.pack(side=LEFT, anchor=S, padx=50, pady=60)
+        # calender 
+        self.calender = Calendar(self.bottomFrame)
+        self.calender.pack(side=RIGHT, anchor=S, expand = YES, padx=50, pady=60)
 
     def toggle_fullscreen(self, event=None):
         self.state = not self.state  # Just toggling the boolean
